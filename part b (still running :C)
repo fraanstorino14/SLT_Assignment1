@@ -1,0 +1,61 @@
+from sklearn.model_selection import LeaveOneOut
+import numpy as np
+import pandas as pd
+from scipy.spatial.distance import cdist
+from collections import Counter
+
+# Optimized k-NN Class with Minkowski Distance
+class KNN:
+    def __init__(self, k, p=2):
+        self.k = k
+        self.p = p
+        self.features = None
+        self.labels = None
+
+    def fit(self, features, labels):
+        self.features = features.to_numpy()
+        self.labels = labels.to_numpy()
+
+    def predict(self, X):
+        X = X.to_numpy()
+        distances = cdist(X, self.features, metric='minkowski', p=self.p)  # Efficient distance computation
+        nearest_indices = np.argsort(distances, axis=1)[:, :self.k]
+        nearest_labels = self.labels[nearest_indices]
+        predictions = np.array([Counter(row).most_common(1)[0][0] for row in nearest_labels])  # Most common label
+        return predictions
+
+# Extract Features (Pixel values) and Labels (Digits)
+train_small_y = train_data_small.iloc[:, 0]  # First column = Digit labels
+train_small_X = train_data_small.iloc[:, 1:]  # Remaining columns = Pixel values
+test_small_y = test_data_small.iloc[:, 0]
+test_small_X = test_data_small.iloc[:, 1:]
+
+# Normalize pixel values (Optional, improves performance)
+train_small_X = train_small_X / 255.0
+test_small_X = test_small_X / 255.0
+
+# Define LOOCV
+loo = LeaveOneOut()
+k_values = range(1, 21)  # k from 1 to 20
+loocv_errors = []
+
+# Run LOOCV for each k
+for k in k_values:
+    knn_model = KNN(k=k, p=2)  # Euclidean distance (p=2)
+    errors = 0
+
+    for train_idx, test_idx in loo.split(train_small_X):
+        X_train, X_test = train_small_X.iloc[train_idx], train_small_X.iloc[test_idx]
+        y_train, y_test = train_small_y.iloc[train_idx], train_small_y.iloc[test_idx]
+
+        knn_model.fit(X_train, y_train)
+        y_pred = knn_model.predict(X_test)
+
+        if y_pred[0] != y_test.values[0]:  # Check if prediction is incorrect
+            errors += 1
+
+    loocv_errors.append(errors / len(train_small_X))  # Compute error rate
+
+# Convert to DataFrame
+loocv_df = pd.DataFrame({"k": list(k_values), "LOOCV Error Rate": loocv_errors})
+display(loocv_df)
